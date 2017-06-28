@@ -129,6 +129,7 @@
   <avrgcccpp.compiler.symbols.DefSymbols>
     <ListValues>
       <Value>DEBUG</Value>
+      <Value>F_CPU=16000000UL</Value>
     </ListValues>
   </avrgcccpp.compiler.symbols.DefSymbols>
   <avrgcccpp.compiler.directories.IncludePaths>
@@ -175,6 +176,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="lib\ldpc.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="lib\ST7540.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="lib\ST7540.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="main.cpp">

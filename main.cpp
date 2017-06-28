@@ -5,10 +5,9 @@
  * Author : @ibrohimislam
  */
 
-#define F_CPU 16000000UL
-
 #include <avr/io.h>
 #include "lib/ldpc.h"
+#include "lib/ST7540.h"
 
 extern "C" {
 	#include "pca.h"
@@ -18,80 +17,79 @@ extern "C" {
 	#include "spi_hw_poll.h"
 }
 
-#define DDR_BU_THERM    DDRC
-#define DDR_RXTX        DDRC
-#define DDR_REG_DATA    DDRC
-#define DDR_CD_PD       DDRC
-
-#define PORT_BU_THERM   PORTC
-#define PORT_RXTX       PORTC
-#define PORT_REG_DATA   PORTC
-#define PORT_CD_PD      PORTC
-
-#define PIN_BU_THERM    PINC
-#define PIN_CD_PD       PINC
-
-#define BU_THERM        PC0
-#define RXTX            PC1
-#define REG_DATA        PC4
-#define CD_PD           PC5
-
-#define reg_acc()       PORT_REG_DATA   |=  (1<<REG_DATA);
-#define data_acc()      PORT_REG_DATA   &=  ~(1<<REG_DATA);
-
-#define tx_mode()       PORT_RXTX   &=  ~(1<<RXTX);
-#define rx_mode()       PORT_RXTX   |=  (1<<RXTX);
-
-// SPI
-#define PORT_SPI    PORTB
-#define PIN_SPI     PINB
-#define DDR_SS      DDRB
-#define PORT_SS     PORTB
-#define ss_clear()      PORT_SS &=  ~(1<<SS_PIN);
-#define ss_set()        PORT_SS |=  (1<<SS_PIN);
-
-// LED
-#define SS_PIN      PB1
-#define DDR_LED     DDRD
-#define PORT_LED    PORTD
-#define LED1        PD6
-#define LED2        PD7
-
+uint8_t ST7540_REG[3] = {0x05, 0x24, 0x27};
+	
+// 0000 0101 0010 0100 0010 0111
+	
+// 0 0 0 0 0 1 0 10 0 10 0 10 00 0 1 00 111
+// 3 2 1 0 9 8 7 65 4 32 1 09 87 6 5 43 210
+//       2               X 1              0
+	
 typedef struct {
 	uint8_t dummy[2];
 	uint8_t header[4];
 	uint8_t body[26];
-} packet;
+} Packet;
 
 typedef union {
-	packet data;
+	Packet data;
 	uint8_t byte[32];
-} packet_to_send;
+} PacketToSend;
 
-packet c = {
-	{0x00, 0x00},
-	{0xFF, 0xFF, 0xFF, 0x00},
-	{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-};
+typedef struct {
+	uint8_t* dummy;
+	uint8_t* header;
+	uint8_t* body;
+} PacketPointer;
 
 int main(void) {
+	
+	struct bus_t spi_bus = initialize();
 	
 	serial_init(E_BAUD_9600);
 	serial_install_interrupts(E_FLAGS_SERIAL_RX_INTERRUPT);
 	serial_flush();
+
 	serial_install_stdio();
 	
+	PacketToSend packetToSend;
+	
+	PacketPointer packet;
+	packet.dummy = packetToSend.data.dummy;
+	packet.header = packetToSend.data.header;
+	packet.body = packetToSend.data.body;
+	
+	packet.dummy[0] = 0x00;
+	packet.dummy[1] = 0x00;
+	
+	packet.header[0] = 0xFF;
+	packet.header[1] = 0xFF;
+	packet.header[2] = 0xFF;
+	packet.header[3] = 0x00;
+	
+	uint8_t nextIndex = 0;
+	
 	while (1) {
-		for (int i = 0; i < 20; i++) {
-			scanf("%c", &(c.body[i]));
+		
+		uint8_t c;
+		
+		if (serial_getc(&c)) {
+			
+			packet.body[nextIndex] = c;
+			nextIndex++;
+			
+			if (nextIndex == 20) {
+				
+				LDPC_Encode(packet.body);
+				nextIndex = 0;
+				
+				tx_mode(); _delay_ms(10);
+				spi_bus.f_send(spi_bus.priv, packetToSend.byte, 32, 1);
+				rx_mode(); _delay_ms(10);
+			}
+			
 		}
 		
-		LDPC_Encode(c.body); 
-		
-		for (int i = 0; i < 25; i++) {
-			printf("0x%02x ", c.body[i]);
-		}
-		printf("0x%02x\n", c.body[25]);
     }
 }
 
